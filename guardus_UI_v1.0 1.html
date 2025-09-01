@@ -1,0 +1,840 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GuardUs Admin — Demo (ΔRSSI overlay in Data Lab)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#fafafa; --fg:#111; --card:#fff; --muted:#6b7280; --border:#e5e7eb; --pri:#111827; }
+    * { box-sizing: border-box; }
+    html, body { height:100%; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; background:var(--bg); color:var(--fg); }
+    .top { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); background:#fff; position: sticky; top:0; z-index:10;}
+    .env { font-size:12px; border:1px solid #c7d2fe; color:#3730a3; background:#eef2ff; padding:2px 8px; border-radius:999px; }
+    .shell { display:grid; grid-template-columns: 220px 1fr; min-height:calc(100vh - 50px); }
+    .side { border-right:1px solid var(--border); background:#fff; }
+    .nav { padding:8px; }
+    .nav button { width:100%; text-align:left; padding:8px 10px; border-radius:10px; border:0; background:transparent; cursor:pointer; }
+    .nav button:hover { background:#f8fafc; }
+    .nav .active { background:#f3f4f6; font-weight:600; }
+    .main { padding:16px; }
+    .kpis { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; }
+    .kpi { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:10px; }
+    .kpi .l { color:var(--muted); font-size:12px; }
+    .kpi .v { font-weight:600; font-size:22px; }
+    .row { display:grid; grid-template-columns: 2fr 1fr; gap:16px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; }
+    .hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .btn { border:1px solid var(--border); background:#fff; padding:6px 10px; border-radius:10px; font-size:12px; cursor:pointer; }
+    .btn:hover { background:#f8fafc; }
+    .pill { font-size:11px; border:1px solid var(--border); padding:2px 6px; border-radius:999px; color:#374151; }
+    .map { position:relative; height:420px; border:1px solid var(--border); border-radius:14px; background: linear-gradient(135deg, #f8fafc, #f3f4f6); overflow:hidden; }
+    .ring { position:absolute; border:1px dashed #d1d5db; border-radius:9999px; }
+    .pin { position:absolute; width:12px; height:12px; box-shadow: 0 0 0 1px #fff; }
+    .pin.circle { border-radius:999px; }
+    .pin.square { border-radius:2px; }
+    .triangle { position:absolute; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; }
+    .diamond { position:absolute; width:12px; height:12px; transform: rotate(45deg); background:#4338ca; box-shadow: 0 0 0 1px #fff; }
+    .label { position:absolute; left:14px; top:-2px; background:rgba(255,255,255,.85); border:1px solid var(--border); padding:0 4px; border-radius:6px; font-size:10px; color:#374151; white-space:nowrap; }
+    .toolbar { position:absolute; top:10px; right:10px; background:rgba(255,255,255,.9); backdrop-filter: blur(4px); border:1px solid var(--border); padding:6px; border-radius:10px; display:flex; gap:8px; align-items:center; font-size:12px; }
+    .legend { position:absolute; left:10px; bottom:10px; font-size:10px; background:rgba(255,255,255,.85); border:1px solid var(--border); border-radius:8px; padding:4px 6px; }
+    .aura { position:absolute; border-radius:9999px; pointer-events:none; }
+    .list { max-height:380px; overflow:auto; border-top:1px solid var(--border); }
+    .alert { padding:8px 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; cursor:pointer;}
+    .sev { font-size:10px; padding:2px 6px; border-radius:999px; border:1px solid; }
+    .sev.P0 { color:#991b1b; background:#fee2e2; border-color:#fecaca; }
+    .sev.P1 { color:#92400e; background:#fffbeb; border-color:#fcd34d; }
+    .sev.P2 { color:#92400e; background:#fff7ed; border-color:#fed7aa; }
+    .sev.INFO { color:#075985; background:#e0f2fe; border-color:#bae6fd; }
+    .table { width:100%; border-collapse: collapse; }
+    .table th, .table td { padding:8px; text-align:left; font-size:14px; border-bottom:1px solid var(--border); }
+    .input, select { border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-size:14px; }
+    .grid { display:grid; gap:8px; }
+    .row2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .miniChart { position:relative; height:160px; border:1px solid var(--border); border-radius:12px; background:#fff; overflow:hidden; }
+    .bars { position:absolute; inset:6px 6px 18px 6px; display:flex; gap:1px; align-items:flex-end; }
+    .bar { flex:1 0 auto; background:#111; }
+    .thline { position:absolute; left:6px; right:6px; border-top:1px dashed #94a3b8; }
+    .lineOverlay { position:absolute; inset:6px 6px 18px 6px; pointer-events:none; }
+    .spike { position:absolute; width:2px; bottom:18px; opacity:.35; }
+    .spike.bunch { background:#16a34a; }  /* green */
+    .spike.flight { background:#ef4444; }  /* red */
+    .legendRow { display:flex; gap:8px; align-items:center; font-size:12px; color:#64748b; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:2px 6px; border:1px solid var(--border); border-radius:999px; background:#fff; }
+    .chip .sw { width:10px; height:10px; border-radius:2px; background:#111; }
+    .chip .sw.line { border-radius:0; height:2px; background:#2563eb; }
+    .help { color:#64748b; font-size:12px; }
+    .camViewer { position:absolute; right:10px; bottom:10px; width:360px; background:#fff; border:1px solid var(--border); border-radius:12px; padding:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); }
+    .camViewer video, .camViewer .placeholder { width:100%; height:200px; background:#111; border-radius:8px; }
+    .camViewer .hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+    .tag { display:inline-block; font-size:11px; border:1px solid var(--border); border-radius:999px; padding:0 6px; }
+    @media (max-width: 980px){
+      .shell { grid-template-columns: 1fr; }
+      .side { position: sticky; top:50px; z-index:5; }
+      .row { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <strong>GuardUs Admin</strong>
+      <span class="env">DEMO</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <a class="btn" href="#demo">Demo Link</a>
+      <a class="btn" href="#help">Help</a>
+    </div>
+  </div>
+
+  <div class="shell">
+    <aside class="side">
+      <nav class="nav" id="nav"></nav>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+
+<script>
+// ------------------ Data ------------------
+const devices = [
+  { alias:'Ewe-17', deviceId:'abc123', type:'collar', status:'online',  batteryV:3.87, ranch:'North Pasture', lat:40.5853, lon:-105.0844, fwVersion:'0.9.3', rssi:-78 },
+  { alias:'Ram-02', deviceId:'def456', type:'collar', status:'online',  batteryV:3.72, ranch:'South Range',   lat:40.5861, lon:-105.0857, fwVersion:'0.9.2', rssi:-71 },
+  { alias:'Calf-11', deviceId:'ghi789', type:'collar', status:'offline', batteryV:3.41, ranch:'South Range',   lat:40.5848, lon:-105.0820, fwVersion:'0.9.1', rssi:-99 },
+  { alias:'Ewe-33', deviceId:'jkl012', type:'collar', status:'online',  batteryV:3.95, ranch:'North Pasture', lat:40.5859, lon:-105.0830, rssi:-75 },
+  { alias:'Relay-01', deviceId:'rel001', type:'relay',  status:'online', batteryV:4.10, ranch:'North Pasture', lat:40.5865, lon:-105.0860, rssi:-65 },
+  { alias:'Tower-01', deviceId:'tow001', type:'tower',  status:'online', batteryV:5.0,  ranch:'North Pasture', lat:40.5850, lon:-105.0868, rssi:-55 },
+];
+
+const cameras = [
+  { id:'cam-1', name:'North Gate Cam', lat:40.5856, lon:-105.0848, radiusM:150, rssi:-62, feedUrl:'', note:'Facing north gate' },
+  { id:'cam-2', name:'South Creek Cam', lat:40.5850, lon:-105.0829, radiusM:200, rssi:-78, feedUrl:'', note:'Creek crossing' },
+  { id:'cam-3', name:'Barn NW Cam',     lat:40.5864, lon:-105.0859, radiusM:120, rssi:-70, feedUrl:'', note:'Barn approach' },
+];
+
+const alerts = [
+  { id:'alrt-1', severity:'P0', deviceId:'abc123', alias:'Ewe-17', kind:'predator_detected', confidence:0.92, ts:new Date().toISOString(), acked:false },
+  { id:'alrt-2', severity:'P1', deviceId:'def456', alias:'Ram-02', kind:'freeze', confidence:0.81, ts:new Date(Date.now()-4*60*1000).toISOString(), acked:false },
+  { id:'alrt-3', severity:'INFO', deviceId:'jkl012', alias:'Ewe-33', kind:'battery_low', confidence:0.75, ts:new Date(Date.now()-15*60*1000).toISOString(), acked:true },
+];
+
+// ------------------ Routes ------------------
+const routes = [
+  { id:'dashboard', label:'Dashboard',  page:pageDashboard },
+  { id:'devices',   label:'Devices',    page:pageDevices },
+  { id:'alerts',    label:'Alerts',     page:pageAlerts },
+  { id:'datalab',   label:'Data Lab',   page:pageDataLab },
+  { id:'audit',     label:'Audit Log',  page:pageAudit },
+  { id:'maint',     label:'Maintenance',page:pageMaint },
+];
+let current = (location.hash==='#demo') ? 'alerts' : 'dashboard';
+
+function renderNav(){
+  const nav = document.getElementById('nav');
+  nav.innerHTML = '';
+  routes.forEach(r => {
+    const btn = document.createElement('button');
+    btn.textContent = r.label;
+    btn.className = (current === r.id) ? 'active' : '';
+    btn.onclick = () => { current = r.id; render(); };
+    nav.appendChild(btn);
+  });
+}
+
+// ------------------ Utilities ------------------
+function formatTime(iso){ return new Date(iso).toLocaleString(); }
+function metersPerDeg(lat){ return { lat:111132, lon:111320*Math.cos(lat*Math.PI/180) }; }
+function haversine(lat1, lon1, lat2, lon2){
+  const R = 6371e3, toRad=d=>d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function rssiColor(rssi){
+  if (rssi >= -65) return 'rgba(34,197,94,0.28)';    // green
+  if (rssi >= -80) return 'rgba(245,158,11,0.28)';  // amber
+  return 'rgba(239,68,68,0.28)';                     // red
+}
+function rssiRadius(rssi){ return (rssi >= -65) ? 44 : (rssi >= -80 ? 32 : 22); }
+function statusColor(status){ return status==='online' ? '#16a34a' : (status==='inactive' ? '#9ca3af' : '#ef4444'); }
+function threatColor(sev){ return sev==='P0' ? '#ef4444' : (sev==='P1' ? '#f59e0b' : (sev==='P2' ? '#facc15' : null)); }
+function activeSeverityFor(deviceId){
+  // highest unacked severity if any
+  const order = { P0:3, P1:2, P2:1, INFO:0 };
+  let best = null;
+  alerts.forEach(a => {
+    if (a.deviceId===deviceId && !a.acked){
+      if (!best || order[a.severity] > order[best]) best = a.severity;
+    }
+  });
+  return best;
+}
+// quantile
+function qtile(xs, q){ const a=[...xs].sort((x,y)=>x-y), i=Math.floor((a.length-1)*q); return a[i]; }
+// moving average
+function movavg(xs, w){ if (w<=1) return xs.slice(); const out=[]; for(let i=0;i<xs.length;i++){ let s=0,c=0; for(let k=-(w-1);k<=0;k++){ const j=i+k; if (j>=0){ s+=xs[j]; c++; } } out.push(s/Math.max(1,c)); } return out; }
+
+// ------------------ Pages ------------------
+function pageDashboard(main){
+  const online = devices.filter(d=>d.status==='online').length;
+  const offline = devices.filter(d=>d.status!=='online').length;
+  const activeAlerts = alerts.filter(a=>!a.acked).length;
+  const lag = Math.floor(Math.random()*5)+1;
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="l">Online</div><div class="v">${online}</div></div>
+      <div class="kpi"><div class="l">Offline/Inactive</div><div class="v">${offline}</div></div>
+      <div class="kpi"><div class="l">Active Alerts</div><div class="v">${activeAlerts}</div></div>
+      <div class="kpi"><div class="l">Ingestion Lag (s)</div><div class="v">${lag}</div></div>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <div class="card">
+        <div class="hdr"><h3 style="margin:0;">Map (RSSI + Cameras)</h3><div><button class="btn" id="goAlerts">Open Alerts</button></div></div>
+        <div class="map" id="dashMap"></div>
+      </div>
+      <div class="card">
+        <div class="hdr"><h3 style="margin:0;">Live Alerts</h3></div>
+        <div class="list" id="alertsList"></div>
+      </div>
+    </div>
+  `;
+  main.appendChild(wrap);
+  document.getElementById('goAlerts').onclick = () => { current='alerts'; render(); };
+
+  renderMap('dashMap', devices[0]);
+  renderAlertsList('alertsList', true);
+}
+
+function pageDevices(main){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="hdr">
+      <h3 style="margin:0;">Devices</h3>
+      <div class="grid" style="grid-auto-flow:column;">
+        <select id="fType">
+          <option value="all">All types</option>
+          <option value="collar">Collar</option>
+          <option value="relay">Relay</option>
+          <option value="gateway">Gateway</option>
+          <option value="tower">Tower</option>
+          <option value="fixed_node">Fixed</option>
+          <option value="aerial_node">Aerial</option>
+        </select>
+        <select id="fStatus">
+          <option value="all">All statuses</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <input class="input" id="q" placeholder="Search alias or ID"/>
+      </div>
+    </div>
+    <div style="overflow:auto;">
+      <table class="table" id="devTable">
+        <thead><tr><th>Alias</th><th>ID</th><th>Type</th><th>Status</th><th>Battery</th><th>Ranch</th><th>Last GPS</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="help">Tip: Add new hardware in Maintenance, then it appears here.</div>
+  `;
+  main.appendChild(card);
+  const q = card.querySelector('#q'), fType = card.querySelector('#fType'), fStatus = card.querySelector('#fStatus');
+  const tbody = card.querySelector('tbody');
+
+  function renderRows(){
+    const text = (q.value || '').toLowerCase();
+    const type = fType.value, status = fStatus.value;
+    tbody.innerHTML = '';
+    devices.filter(d => {
+      if (type !== 'all' && (d.type||'collar') !== type) return false;
+      if (status !== 'all' && d.status !== status) return false;
+      if (text && !( (d.alias+' '+d.deviceId).toLowerCase().includes(text) )) return false;
+      return true;
+    }).forEach(d => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${d.alias}</td><td>${d.deviceId}</td><td>${d.type||'collar'}</td><td>${d.status}</td><td>${(d.batteryV??0).toFixed(2)} V</td><td>${d.ranch||'-'}</td><td>${d.lat.toFixed(4)}, ${d.lon.toFixed(4())}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  [q,fType,fStatus].forEach(el => el.oninput = renderRows);
+  renderRows();
+}
+
+function pageAlerts(main){
+  const wrap = document.createElement('div');
+  wrap.className = 'row';
+  wrap.innerHTML = `
+    <div class="card">
+      <div class="hdr"><h3 style="margin:0;">Alerts</h3>
+        <div class="grid" style="grid-auto-flow:column;">
+          <select id="sev"><option value="all">All</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="INFO">INFO</option></select>
+          <label><input type="checkbox" id="unacked"/> Only unacked</label>
+        </div>
+      </div>
+      <div class="list" id="alertsList"></div>
+    </div>
+    <div class="card" id="drawer">
+      <div class="help">Select an alert to view dispersion map, neighbor reactions and in-range cameras.</div>
+    </div>
+  `;
+  main.appendChild(wrap);
+  renderAlertsList('alertsList', false, (a)=>openAlert(a));
+  function openAlert(a){
+    const dev = devices.find(d=>d.deviceId===a.deviceId);
+    const drawer = document.getElementById('drawer');
+    drawer.innerHTML = `
+      <div class="hdr">
+        <div>
+          <div style="font-size:12px;color:#64748b">${formatTime(a.ts)}</div>
+          <h3 style="margin:0;"><span class="sev ${a.severity}">${a.severity}</span> ${a.kind} — ${dev.alias} (${dev.deviceId})</h3>
+          <div class="help">conf ${a.confidence.toFixed(2)} • ${dev.lat.toFixed(4)}, ${dev.lon.toFixed(4)}</div>
+        </div>
+      </div>
+      <div class="map" id="alertMap"></div>
+      <div class="row2" style="margin-top:10px;">
+        <div>
+          <h4>Neighbor Reactions (≤200 m)</h4>
+          <div id="neighbors" class="help"></div>
+        </div>
+        <div>
+          <h4>In-Range Cameras</h4>
+          <div id="cams" class="help"></div>
+        </div>
+      </div>
+    `;
+    renderMap('alertMap', dev, true);
+    // neighbors: collars within 200m and recent alert within +/-5 min
+    const NEI = 200, WIN = 5*60*1000, t0 = new Date(a.ts).getTime();
+    const ns = devices.filter(d => d.deviceId!==dev.deviceId && ((d.type||'collar')==='collar'))
+      .map(d => ({ d, dist: haversine(dev.lat,dev.lon,d.lat,d.lon) }))
+      .filter(x => x.dist <= NEI)
+      .map(x => ({ ...x, reactive: alerts.some(z => z.deviceId===x.d.deviceId && Math.abs(new Date(z.ts).getTime()-t0)<=WIN) }))
+      .sort((x,y)=>x.dist-y.dist);
+    const neiDiv = drawer.querySelector('#neighbors');
+    neiDiv.innerHTML = (ns.length===0) ? 'No nearby devices.' : ns.map(n => `${n.d.alias} (${n.d.deviceId}) — ${n.dist.toFixed(1)} m • ${n.reactive? 'Reactive':'No recent alert'}`).join('<br/>');
+
+    // cameras in range of alert device
+    const cs = cameras.map(c => ({...c, dist: haversine(dev.lat,dev.lon,c.lat,c.lon)})).filter(c => c.dist <= c.radiusM).sort((a,b)=>a.dist-b.dist);
+    const camDiv = drawer.querySelector('#cams');
+    camDiv.innerHTML = (cs.length===0) ? 'No cameras within coverage.' : cs.map(c => `${c.name} — ${c.dist.toFixed(1)} m • coverage ${c.radiusM} m`).join('<br/>');
+  }
+  // Auto-open first alert in #demo mode
+  if (location.hash==='#demo' && alerts.length) openAlert(alerts[0]);
+}
+
+function pageDataLab(main){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="hdr">
+      <h3 style="margin:0;">Data Lab</h3>
+      <div class="grid" style="grid-auto-flow:column;">
+        <select id="devSel"></select>
+        <select id="win"><option value="30">Last 30 min</option><option value="60" selected>Last 1 h</option><option value="180">Last 3 h</option></select>
+        <select id="mode"><option value="all">All behavior</option><option value="rest">Resting only</option></select>
+      </div>
+    </div>
+    <div class="miniChart" id="chart">
+      <div class="bars" id="bars"></div>
+      <svg class="lineOverlay" id="lineSvg" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="legendRow" style="margin-top:6px;">
+      <span class="chip"><span class="sw" style="background:#111827"></span> Accelerometer (activity)</span>
+      <span class="chip"><span class="sw line"></span> ΔRSSI (dB/min)</span>
+      <span class="chip"><span class="sw" style="background:#16a34a"></span> Bunching spike</span>
+      <span class="chip"><span class="sw" style="background:#ef4444"></span> Flight spike</span>
+    </div>
+    <div class="row2" style="margin-top:6px;">
+      <div class="grid" style="grid-auto-flow:column; align-items:center;">
+        <label class="chip"><input type="checkbox" id="ovRssi" checked style="margin-right:6px;"> ΔRSSI overlay</label>
+        <label class="chip">Smooth <input type="number" id="ovSmooth" min="1" max="5" value="2" style="width:54px; margin-left:6px;"> pts</label>
+        <label class="chip">Spike ≥ <input type="number" id="ovThresh" min="1" max="12" value="3" style="width:54px; margin-left:6px;"> dB/min</label>
+        <label class="chip"><input type="checkbox" id="ovSpikes" checked style="margin-right:6px;"> Highlight spikes</label>
+      </div>
+      <div class="help">Interpretation: positive ΔRSSI ⇒ closer/denser (bunching); negative ΔRSSI ⇒ farther/dispersing (flight).</div>
+    </div>
+    <div class="hdr" style="margin-top:10px;"><h4 style="margin:0;">Annotations</h4></div>
+    <div class="row2">
+      <div class="grid">
+        <div class="help">Quick add (minute indices in current window)</div>
+        <div class="grid" style="grid-auto-flow:column;align-items:center;">
+          <input id="aStart" class="input" style="width:80px" type="number" value="30" />
+          <input id="aDur" class="input" style="width:80px" type="number" value="5" />
+          <select id="aLabel">
+            <option>Resting</option><option>Normal Grazing</option>
+            <option>Flight</option><option>Freeze</option><option>Predator Reaction</option><option>Device Issue</option>
+          </select>
+          <input id="aNote" class="input" style="min-width:140px" placeholder="Note (observer)" />
+          <button class="btn" id="addAnn">Add</button>
+        </div>
+      </div>
+      <div>
+        <div id="annList" class="help">No annotations yet.</div>
+      </div>
+    </div>
+  `;
+  main.appendChild(card);
+
+  const devSel = card.querySelector('#devSel');
+  devices.filter(d => (d.type||'collar')==='collar').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId; opt.textContent = `${d.alias} (${d.deviceId})`; devSel.appendChild(opt);
+  });
+  const winSel = card.querySelector('#win');
+  const modeSel = card.querySelector('#mode');
+  const chart = card.querySelector('#chart');
+  const bars = card.querySelector('#bars');
+  const lineSvg = card.querySelector('#lineSvg');
+  const anns = [];
+  const annList = card.querySelector('#annList');
+
+  // controls
+  const ovRssi = card.querySelector('#ovRssi');
+  const ovSmooth = card.querySelector('#ovSmooth');
+  const ovThresh = card.querySelector('#ovThresh');
+  const ovSpikes = card.querySelector('#ovSpikes');
+
+  function genAccelSeries(m, devId){
+    const arr = []; const now = Date.now();
+    for (let i = m-1; i >= 0; i--){
+      const t = now - i*60*1000;
+      let v = 0.2 + 0.05*Math.sin((i/m)*Math.PI*2) + (Math.random()-0.5)*0.05;
+      const spike = alerts.some(a => a.deviceId===devId && Math.abs(new Date(a.ts).getTime()-t) < 4*60*1000);
+      if (spike) v += 0.6 + Math.random()*0.3;
+      v = Math.max(0, Math.min(1.2, v));
+      arr.push(v);
+    }
+    return arr;
+  }
+  function genRssiSeries(m, devId){
+    // baseline from current device rssi with noise; correlate dips/spikes near alerts
+    const base = devices.find(d=>d.deviceId===devId)?.rssi ?? -75;
+    const arr=[]; const now = Date.now();
+    for (let i=m-1;i>=0;i--){
+      const t = now - i*60*1000;
+      let r = base + (Math.random()-0.5)*4; // ±2 dB noise
+      const spike = alerts.some(a => a.deviceId===devId && Math.abs(new Date(a.ts).getTime()-t) < 4*60*1000);
+      if (spike){
+        // sudden drop then recovery to mimic flight, or rise to mimic bunching
+        const sign = (Math.random()>0.5) ? -1 : +1;
+        r += sign * (3 + Math.random()*4); // ±3–7 dB
+      }
+      arr.push(r);
+    }
+    // light smoothing to avoid jitter
+    return movavg(arr, 2);
+  }
+  function draw(){
+    const m = parseInt(winSel.value,10);
+    const devId = devSel.value || devices[0].deviceId;
+    const acc = genAccelSeries(m, devId);
+    const rssi = genRssiSeries(m, devId);
+    const thr = qtile(acc, 0.3);
+
+    // clear
+    bars.innerHTML=''; lineSvg.innerHTML='';
+    const rect = chart.getBoundingClientRect();
+    const w = rect.width || 600, h = rect.height || 160;
+    const inner = { left:6, right:6, top:6, bottom:18 };
+    const iw = w - inner.left - inner.right;
+    const ih = h - inner.top - inner.bottom;
+    const accMax = Math.max(1, ...acc);
+
+    // bars
+    acc.forEach((v,i)=>{
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      let resting = v < thr;
+      bar.style.height = Math.max(1, Math.round((v/accMax)*ih)) + 'px';
+      bar.style.opacity = (modeSel.value==='rest' && !resting) ? 0.2 : 1;
+      bars.appendChild(bar);
+    });
+    // threshold line
+    const th = document.createElement('div');
+    th.className = 'thline';
+    th.style.bottom = (inner.bottom + (thr/accMax)*ih) + 'px';
+    chart.appendChild(th);
+
+    if (ovRssi.checked){
+      // compute ΔRSSI per minute (dB/min), after smoothing
+      const smoothW = Math.max(1, Math.min(5, parseInt(ovSmooth.value,10) || 1));
+      const rs = movavg(rssi, smoothW);
+      const deltas = rs.map((v,i)=> i===0 ? 0 : (v - rs[i-1]));
+      const maxAbs = Math.max(4, ...deltas.map(x=>Math.abs(x)));
+      // scale delta to overlay height (share same inner box)
+      // generate SVG path
+      const pts = deltas.map((d,i)=>{
+        const x = inner.left + (i/(m-1))*iw;
+        const y = inner.top + (0.5 - (d/(2*maxAbs))) * ih; // centered at middle
+        return [x,y];
+      });
+      const dAttr = pts.map((p,i)=> (i? 'L':'M') + p[0].toFixed(2)+','+p[1].toFixed(2)).join(' ');
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', dAttr);
+      path.setAttribute('stroke', '#2563eb');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('fill', 'none');
+      lineSvg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      lineSvg.appendChild(path);
+
+      // spike markers
+      if (ovSpikes.checked){
+        const thrDb = Math.max(1, Math.min(12, parseInt(ovThresh.value,10) || 3));
+        deltas.forEach((d,i)=>{
+          if (Math.abs(d) >= thrDb){
+            const x = inner.left + (i/(m-1))*iw;
+            const spike = document.createElement('div');
+            spike.className = 'spike ' + (d>0 ? 'bunch' : 'flight');
+            spike.style.left = (x)+'px';
+            spike.style.height = ih+'px';
+            spike.title = (d>0?'Bunching +':'Flight −') + Math.abs(d).toFixed(1) + ' dB';
+            chart.appendChild(spike);
+          }
+        });
+      }
+    }
+  }
+  draw();
+  [devSel, winSel, modeSel, ovRssi, ovSmooth, ovThresh, ovSpikes].forEach(el => el.onchange = draw);
+
+  card.querySelector('#addAnn').onclick = () => {
+    const start = parseInt(card.querySelector('#aStart').value,10) || 0;
+    const dur = parseInt(card.querySelector('#aDur').value,10) || 1;
+    const label = card.querySelector('#aLabel').value;
+    const note = card.querySelector('#aNote').value || '';
+    anns.unshift({ start, dur, label, note, id: 'ann-'+Date.now() });
+    annList.innerHTML = anns.map(a => `<div class="help"><span class="pill">${a.label}</span> ${a.start}–${a.start+a.dur} min ${a.note?('• '+a.note):''}</div>`).join('');
+  };
+}
+
+function pageAudit(main){
+  const rows = [
+    { ts:new Date().toISOString(), user:'admin@guardus', action:'set_thresholds', resource:'abc123', before:'0.85', after:'0.90', status:'OK' },
+    { ts:new Date().toISOString(), user:'viewer@guardus', action:'login', resource:'-', before:'-', after:'-', status:'OK' },
+  ];
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="hdr"><h3 style="margin:0;">Audit Log</h3></div>
+    <div style="overflow:auto;">
+      <table class="table">
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Before → After</th><th>Status</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr><td>${formatTime(r.ts)}</td><td>${r.user}</td><td>${r.action}</td><td>${r.resource}</td><td>${r.before} → ${r.after}</td><td>${r.status}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  `;
+  main.appendChild(card);
+}
+
+function pageMaint(main){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="hdr"><h3 style="margin:0;">Maintenance</h3></div>
+    <div class="grid">
+      <div class="row2">
+        <div class="grid">
+          <h4 style="margin:0;">Add Device</h4>
+          <div class="grid" style="grid-auto-flow:column;align-items:center;">
+            <select id="mType">
+              <option value="collar">collar</option><option value="relay">relay</option><option value="gateway">gateway</option><option value="tower">tower</option><option value="fixed_node">fixed</option><option value="aerial_node">aerial</option>
+            </select>
+            <input id="mAlias" class="input" placeholder="Alias" />
+            <input id="mId" class="input" placeholder="Device ID" />
+            <input id="mRanch" class="input" placeholder="Ranch" value="North Pasture" />
+            <input id="mLat" class="input" placeholder="Lat" value="40.5855" />
+            <input id="mLon" class="input" placeholder="Lon" value="-105.0849" />
+            <button class="btn" id="mAdd">Add Device</button>
+          </div>
+        </div>
+        <div class="grid">
+          <h4 style="margin:0;">Add Camera</h4>
+          <div class="grid" style="grid-auto-flow:column;align-items:center;">
+            <input id="cName" class="input" placeholder="Name" value="New Cam" />
+            <input id="cLat" class="input" placeholder="Lat" value="40.5857" />
+            <input id="cLon" class="input" placeholder="Lon" value="-105.0852" />
+            <input id="cRad" class="input" placeholder="Radius (m)" value="150" />
+            <input id="cRSSI" class="input" placeholder="RSSI (dBm)" value="-70" />
+            <input id="cFeed" class="input" placeholder="Feed URL (HLS .m3u8 / MP4)" />
+            <button class="btn" id="cAdd">Add Camera</button>
+          </div>
+          <div class="help">HLS (.m3u8) plays natively in Safari; other browsers need hls.js. For demo, you can use an MP4 URL.</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <h4>Devices</h4>
+          <table class="table"><thead><tr><th>Alias</th><th>ID</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="tDev"></tbody>
+          </table>
+        </div>
+        <div>
+          <h4>Cameras</h4>
+          <table class="table"><thead><tr><th>Name</th><th>Lat, Lon</th><th>Radius</th><th>RSSI</th><th>Feed</th><th>Actions</th></tr></thead>
+            <tbody id="tCam"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  main.appendChild(card);
+
+  const tDev = card.querySelector('#tDev');
+  const tCam = card.querySelector('#tCam');
+
+  function renderTables(){
+    tDev.innerHTML = devices.map(d => `<tr><td>${d.alias}</td><td>${d.deviceId}</td><td>${d.type||'collar'}</td><td>${d.status}</td><td><button class="btn" data-del="${d.deviceId}">Remove</button></td></tr>`).join('');
+    tCam.innerHTML = cameras.map(c => `<tr><td>${c.name}</td><td>${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</td><td>${c.radiusM} m</td><td>${c.rssi??'-'} dBm</td><td>${c.feedUrl?'<span class="tag">set</span>':'<span class="tag">empty</span>'}</td><td><button class="btn" data-cdel="${c.id}">Remove</button></td></tr>`).join('');
+    tDev.querySelectorAll('button[data-del]').forEach(b=> b.onclick = () => { const id=b.getAttribute('data-del'); const i=devices.findIndex(x=>x.deviceId===id); if(i>=0){ devices.splice(i,1); renderTables(); } });
+    tCam.querySelectorAll('button[data-cdel]').forEach(b=> b.onclick = () => { const id=b.getAttribute('data-cdel'); const i=cameras.findIndex(x=>x.id===id); if(i>=0){ cameras.splice(i,1); renderTables(); } });
+  }
+  renderTables();
+
+  card.querySelector('#mAdd').onclick = () => {
+    const type = card.querySelector('#mType').value;
+    const alias = card.querySelector('#mAlias').value || `${type}-${Math.random().toString(36).slice(2,5)}`;
+    const deviceId = card.querySelector('#mId').value || `${type}-${Math.random().toString(36).slice(2,7)}`;
+    const ranch = card.querySelector('#mRanch').value || 'North Pasture';
+    const lat = parseFloat(card.querySelector('#mLat').value||'0');
+    const lon = parseFloat(card.querySelector('#mLon').value||'0');
+    devices.unshift({ alias, deviceId, type, status:'online', batteryV:3.9, ranch, lat, lon, rssi:-75 });
+    renderTables();
+    alert('Device added.');
+  };
+  card.querySelector('#cAdd').onclick = () => {
+    const id = `cam-${Math.random().toString(36).slice(2,7)}`;
+    const name = card.querySelector('#cName').value || 'Cam';
+    const lat = parseFloat(card.querySelector('#cLat').value||'0');
+    const lon = parseFloat(card.querySelector('#cLon').value||'0');
+    const radiusM = parseInt(card.querySelector('#cRad').value||'150',10);
+    const rssi = parseInt(card.querySelector('#cRSSI').value||'-70',10);
+    const feedUrl = card.querySelector('#cFeed').value || '';
+    cameras.unshift({ id, name, lat, lon, radiusM, rssi, feedUrl });
+    renderTables();
+    alert('Camera added.');
+  };
+}
+
+// ------------------ Alerts & Map (unchanged from previous demo) ------------------
+function renderAlertsList(elemId, compact=false, onOpen=null){
+  const container = document.getElementById(elemId);
+  const sevSel = document.getElementById('sev');
+  const unacked = document.getElementById('unacked');
+  function visible(){
+    const s = sevSel ? sevSel.value : 'all';
+    const onlyUn = unacked ? unacked.checked : false;
+    return alerts.filter(a => (s==='all' || a.severity===s) && (!onlyUn || !a.acked));
+  }
+  function draw(){
+    container.innerHTML = '';
+    visible().forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'alert';
+      div.innerHTML = `<span class="sev ${a.severity}">${a.severity}</span>
+        <div style="flex:1;">
+          <div style="font-weight:600">${a.alias} <span style="color:#6b7280">(${a.deviceId})</span></div>
+          <div style="color:#6b7280;font-size:13px">${a.kind} • conf ${a.confidence.toFixed(2)} • ${formatTime(a.ts)}</div>
+        </div>
+        ${a.acked?'<span class="pill">Acked</span>':'<button class="btn">Ack</button>'}`;
+      if (!a.acked) {
+        div.querySelector('.btn').onclick = (e) => { a.acked=true; draw(); e.stopPropagation(); };
+      }
+      if (onOpen) div.onclick = () => onOpen(a);
+      container.appendChild(div);
+    });
+  }
+  draw();
+  if (sevSel) sevSel.onchange = draw;
+  if (unacked) unacked.onchange = draw;
+}
+
+function renderMap(elemId, centerDev){
+  const map = document.getElementById(elemId);
+  const H = map.clientHeight || 420;
+  let zoom = 1.0;
+  function scale(){ return ((600/2-24)/220) * zoom; }
+  const mpd = metersPerDeg(centerDev.lat);
+  function toPixel(lat, lon){
+    const dx = (lon - centerDev.lon) * mpd.lon;
+    const dy = (lat - centerDev.lat) * mpd.lat;
+    return { left: 600/2 + dx*scale(), top: H/2 - dy*scale() };
+  }
+
+  // toolbar
+  const tb = document.createElement('div');
+  tb.className = 'toolbar';
+  tb.innerHTML = `<label><input type="checkbox" id="toggleRSSI" checked> RSSI</label>
+                  <label><input type="checkbox" id="toggleCams" checked> Cameras</label>
+                  <button class="btn" id="zIn">+</button><button class="btn" id="zOut">−</button>`;
+  map.appendChild(tb);
+  tb.querySelector('#zIn').onclick = ()=>{ zoom=Math.min(2.5,zoom*1.2); redraw(); };
+  tb.querySelector('#zOut').onclick = ()=>{ zoom=Math.max(0.6,zoom/1.2); redraw(); };
+
+  function drawRingsAndLegend(){
+    [50,100,200].forEach(r=>{
+      const d = r*2*scale();
+      const ring = document.createElement('div');
+      ring.className = 'ring';
+      ring.style.width = d+'px';
+      ring.style.height = d+'px';
+      ring.style.left = `calc(50% - ${r*scale()}px)`;
+      ring.style.top = `calc(50% - ${r*scale()}px)`;
+      map.appendChild(ring);
+    });
+    const legend = document.createElement('div');
+    legend.className = 'legend';
+    legend.innerHTML = `
+      <div><strong>Legend</strong></div>
+      <div>● collar (status/alert color)</div>
+      <div>■ relay</div>
+      <div>▲ tower</div>
+      <div>◆ camera</div>
+      <div class="help" style="margin-top:4px;">RSSI: green ≥ −65 • amber ≥ −80 • red &lt; −80</div>`;
+    map.appendChild(legend);
+  }
+
+  function drawCameraViewer(cam){
+    // one viewer at a time
+    const old = map.querySelector('.camViewer'); if (old) old.remove();
+    const box = document.createElement('div');
+    box.className = 'camViewer';
+    const isHls = cam.feedUrl && /\.m3u8(\?.*)?$/.test(cam.feedUrl);
+    box.innerHTML = `
+      <div class="hdr">
+        <strong>${cam.name}</strong>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${cam.feedUrl ? '<span class="pill">Live</span>' : ''}
+          <button class="btn" id="closeCam">Close</button>
+        </div>
+      </div>
+      ${cam.feedUrl
+        ? (isHls
+            ? `<div class="placeholder" style="display:flex;align-items:center;justify-content:center;color:#e5e7eb;">
+                 <div style="text-align:center;">
+                   <div style="font-size:12px;color:#9ca3af">HLS (.m3u8) requires Safari or hls.js.</div>
+                   <div class="help">This demo is offline; use Safari or set an MP4 URL, or integrate hls.js in production.</div>
+                 </div>
+               </div>`
+            : `<video controls preload="none" muted playsinline src="${cam.feedUrl}"></video>`)
+        : `<div class="placeholder" style="display:flex;align-items:center;justify-content:center;color:#e5e7eb;">
+             <div style="text-align:center;">
+               <div style="font-size:12px;color:#9ca3af">No feed URL set</div>
+               <div class="help">Add one in Maintenance → Cameras (MP4 or HLS .m3u8)</div>
+             </div>
+           </div>`}
+      <div class="help" style="margin-top:6px;">${cam.note||''}</div>
+    `;
+    map.appendChild(box);
+    box.querySelector('#closeCam').onclick = ()=> box.remove();
+  }
+
+  function drawPins(){
+    // Devices first
+    devices.forEach(d=>{
+      const p = toPixel(d.lat, d.lon);
+      // RSSI aura for devices
+      if (tb.querySelector('#toggleRSSI').checked && d.rssi != null){
+        const aura = document.createElement('div');
+        const size = rssiRadius(d.rssi)*2;
+        aura.className = 'aura';
+        aura.style.left = (p.left - rssiRadius(d.rssi)) + 'px';
+        aura.style.top  = (p.top  - rssiRadius(d.rssi)) + 'px';
+        aura.style.width = size+'px'; aura.style.height = size+'px';
+        const c = rssiColor(d.rssi);
+        aura.style.background = `radial-gradient(circle, ${c} 0%, ${c.replace('0.28','0.14')} 50%, rgba(255,255,255,0) 70%)`;
+        map.appendChild(aura);
+      }
+
+      const type = (d.type||'collar');
+      let color = statusColor(d.status);
+      if (type==='collar'){
+        const sev = activeSeverityFor(d.deviceId);
+        const threat = threatColor(sev);
+        if (threat) color = threat; // override with alert color
+      }
+
+      if (type === 'tower'){
+        const tri = document.createElement('div');
+        tri.className = 'triangle';
+        tri.style.borderBottom = `12px solid ${color}`;
+        tri.style.left = (p.left - 6)+'px';
+        tri.style.top  = (p.top - 12)+'px';
+        map.appendChild(tri);
+      } else {
+        const pin = document.createElement('div');
+        pin.className = 'pin ' + (type==='relay' ? 'square' : 'circle');
+        pin.style.background = color;
+        pin.style.left = (p.left - 6)+'px';
+        pin.style.top  = (p.top - 6)+'px';
+        map.appendChild(pin);
+      }
+
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.style.left = (p.left + 6)+'px'; label.style.top = (p.top - 6)+'px';
+      label.innerText = d.alias;
+      map.appendChild(label);
+    });
+
+    // Cameras (with RSSI aura + label shows RSSI)
+    if (tb.querySelector('#toggleCams').checked){
+      cameras.forEach(c=>{
+        const p = toPixel(c.lat, c.lon);
+        if (tb.querySelector('#toggleRSSI').checked && c.rssi != null){
+          const aura = document.createElement('div');
+          const size = rssiRadius(c.rssi)*2;
+          aura.className = 'aura';
+          aura.style.left = (p.left - rssiRadius(c.rssi)) + 'px';
+          aura.style.top  = (p.top  - rssiRadius(c.rssi)) + 'px';
+          aura.style.width = size+'px'; aura.style.height = size+'px';
+          const col = rssiColor(c.rssi);
+          aura.style.background = `radial-gradient(circle, ${col} 0%, ${col.replace('0.28','0.14')} 50%, rgba(255,255,255,0) 70%)`;
+          map.appendChild(aura);
+        }
+
+        const k = document.createElement('div');
+        k.className = 'diamond';
+        k.style.left = (p.left - 6)+'px';
+        k.style.top  = (p.top - 6)+'px';
+        k.title = c.name;
+        k.onclick = ()=> drawCameraViewer(c);
+        map.appendChild(k);
+
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.style.left = (p.left + 6)+'px'; label.style.top = (p.top - 6)+'px';
+        label.innerText = `${c.name} (${c.rssi??'—'} dBm)`;
+        map.appendChild(label);
+      });
+    }
+  }
+
+  function redraw(){
+    map.innerHTML='';
+    // re-attach toolbar
+    const tb2 = tb.cloneNode(true);
+    map.appendChild(tb2);
+    tb2.querySelector('#zIn').onclick = ()=>{ zoom=Math.min(2.5,zoom*1.2); redraw(); };
+    tb2.querySelector('#zOut').onclick = ()=>{ zoom=Math.max(0.6,zoom/1.2); redraw(); };
+    tb2.querySelector('#toggleRSSI').onchange = ()=> redraw();
+    tb2.querySelector('#toggleCams').onchange = ()=> redraw();
+    drawRingsAndLegend();
+    drawPins();
+  }
+  drawRingsAndLegend();
+  drawPins();
+}
+
+function render(){
+  renderNav();
+  const main = document.getElementById('main'); main.innerHTML='';
+  (routes.find(r=>r.id===current)||routes[0]).page(main);
+}
+render();
+</script>
+</body>
+</html>
