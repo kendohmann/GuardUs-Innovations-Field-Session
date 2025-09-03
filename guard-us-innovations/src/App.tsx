@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import TopBar from './components/TopBar';
-import Nav from './components/Nav';
-import Dashboard from './pages/Dashboard';
-import Devices from './pages/Devices';
-import AlertsPage from './pages/Alerts';
-import DataLab from './pages/DataLab';
-import Audit from './pages/Audit';
-import Maintenance from './pages/Maintenance';
-import './styles.css';
-import { dummyAlerts, dummyCameras, dummyDevices } from './data';
+import TopBar from './view/components/TopBar';
+import Nav from './view/components/Nav';
+import Dashboard from './view/pages/Dashboard';
+import Devices from './view/pages/Devices';
+import AlertsPage from './view/pages/Alerts';
+import DataLab from './view/pages/DataLab';
+import Audit from './view/pages/Audit';
+import Maintenance from './view/pages/Maintenance';
+import './view/styles.css';
+import { dummyAlerts, dummyCameras, dummyDevices } from './model/data';
 import type { Alert, Camera, Device } from './types';
 
 const routes = [
