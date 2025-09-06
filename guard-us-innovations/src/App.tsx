@@ -23,6 +23,7 @@ const routes = [
 type Route = (typeof routes)[number];
 
 export default function App() {
+  //TODO:: replace dummy data with real data from backend
   const [devices, setDevices] = useState<Device[]>(dummyDevices);
   const [cameras, setCameras] = useState<Camera[]>(dummyCameras);
   const [alerts, setAlerts] = useState<Alert[]>(dummyAlerts);
@@ -34,6 +35,7 @@ export default function App() {
 
   useEffect(() => {
     const onHash = () => {
+      //TODO:: add hash for help requests (maybe - team decision), and for logged in users, and not logged in users
       if (location.hash === '#demo') setCurrent('devices');
     };
     window.addEventListener('hashchange', onHash);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Camera, Device, DeviceType } from '../../model/types';
+import type { Camera, Device, DeviceType } from '../types';
 
 interface Props {
   devices: Device[];
@@ -190,8 +190,8 @@ export default function Maintenance({
               </button>
             </div>
             <div className="help">
-              {/* // TODO: eventually we'll want to intregrate hls.js and get rid of this message */}
               HLS (.m3u8) plays natively in Safari; other browsers need hls.js.
+              For demo, you can use an MP4 URL.
             </div>
           </div>
         </div>
